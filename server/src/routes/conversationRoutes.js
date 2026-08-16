@@ -5,13 +5,15 @@ const {
   createConversation,
   getMyConversations,
   joinConversation,
-  getMembers
+  getMembers,
+  discoverRooms
 } = require('../controllers/conversationController');
 
 router.use(authMiddleware);
 
 router.post('/', createConversation);
 router.get('/', getMyConversations);
+router.get('/discover', discoverRooms);
 router.post('/:id/join', joinConversation);
 router.get('/:id/members', getMembers);
 

@@ -140,9 +140,45 @@ const getMembers = async (req, res, next) => {
   }
 };
 
+// Discover public rooms the user is NOT a member of
+const discoverRooms = async (req, res, next) => {
+  try {
+    const rooms = await prisma.conversation.findMany({
+      where: {
+        type: 'channel',
+        isPrivate: false,
+        NOT: {
+          members: {
+            some: {
+              userId: req.userId
+            }
+          }
+        }
+      },
+      include: {
+        createdBy: {
+          select: { id: true, username: true }
+        },
+        _count: {
+          select: { members: true, messages: true }
+        }
+      },
+      orderBy: { updatedAt: 'desc' }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: { rooms }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createConversation,
   getMyConversations,
   joinConversation,
-  getMembers
+  getMembers,
+  discoverRooms
 };

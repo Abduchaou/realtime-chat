@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { getConversations, createConversation } from '../../api/conversations';
+import { getConversations, discoverRooms, joinConversation, createConversation } from '../../api/conversations';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
-import { Plus, Hash, Lock, Users, LogOut, MessageCircle, Menu, X } from 'lucide-react';
+import { Plus, Hash, Lock, Users, LogOut, MessageCircle, Menu, X, Globe } from 'lucide-react';
 
 const Sidebar = ({ selectedConversation, onSelectConversation, isOpen, onToggle }) => {
   const [conversations, setConversations] = useState([]);
+  const [publicRooms, setPublicRooms] = useState([]);
+  const [activeTab, setActiveTab] = useState('my'); // 'my' or 'discover'
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: '', description: '', isPrivate: false });
@@ -23,13 +25,30 @@ const Sidebar = ({ selectedConversation, onSelectConversation, isOpen, onToggle 
   }, [socket]);
 
   const loadConversations = async () => {
+    setLoading(true);
     try {
-      const res = await getConversations();
-      setConversations(res.data.data.conversations);
+      const [myRes, discoverRes] = await Promise.all([
+        getConversations(),
+        discoverRooms()
+      ]);
+      setConversations(myRes.data.data.conversations);
+      setPublicRooms(discoverRes.data.data.rooms);
     } catch (err) {
-      console.error('Failed to load conversations:', err);
+      console.error('Failed to load:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleJoin = async (roomId) => {
+    try {
+      await joinConversation(roomId);
+      await loadConversations();
+      // Find the joined room and select it
+      const joined = publicRooms.find(r => r.id === roomId);
+      if (joined) onSelectConversation(joined);
+    } catch (err) {
+      console.error('Failed to join:', err);
     }
   };
 
@@ -59,7 +78,6 @@ const Sidebar = ({ selectedConversation, onSelectConversation, isOpen, onToggle 
 
   return (
     <>
-      {/* Mobile overlay */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
@@ -74,65 +92,132 @@ const Sidebar = ({ selectedConversation, onSelectConversation, isOpen, onToggle 
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gray-50 dark:bg-gray-800">
-          <div className="flex items-center gap-2">
-            <MessageCircle className="text-blue-600" size={24} />
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Chat Rooms</h2>
+        <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="text-blue-600" size={24} />
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Chat Rooms</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm"
+                title="Create room"
+              >
+                <Plus size={18} />
+              </button>
+              <button onClick={onToggle} className="lg:hidden p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                <X size={20} />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* Tabs */}
+          <div className="flex bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
             <button
-              onClick={() => setShowCreateModal(true)}
-              className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm"
-              title="Create room"
+              onClick={() => setActiveTab('my')}
+              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition ${
+                activeTab === 'my'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              }`}
             >
-              <Plus size={18} />
+              My Rooms
             </button>
-            <button onClick={onToggle} className="lg:hidden p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-              <X size={20} />
+            <button
+              onClick={() => setActiveTab('discover')}
+              className={`flex-1 py-1.5 text-sm font-medium rounded-md transition ${
+                activeTab === 'discover'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              }`}
+            >
+              Discover
             </button>
           </div>
         </div>
 
-        {/* Conversation List */}
+        {/* Room List */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="p-8 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             </div>
-          ) : conversations.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-              <div className="text-4xl mb-2">🏠</div>
-              <p className="text-sm">No rooms yet. Create one!</p>
-            </div>
-          ) : (
-            conversations.map((conv) => (
-              <button
-                key={conv.id}
-                onClick={() => {
-                  onSelectConversation(conv);
-                  onToggle();
-                }}
-                className={`w-full p-3 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition text-left border-l-4 ${
-                  selectedConversation?.id === conv.id 
-                    ? 'bg-blue-50 dark:bg-gray-800 border-blue-500' 
-                    : 'border-transparent'
-                }`}
-              >
-                <div className={`p-2 rounded-lg ${conv.isPrivate ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600'}`}>
-                  {conv.isPrivate ? <Lock size={16} /> : <Hash size={16} />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 dark:text-white truncate text-sm">{conv.name}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {getLastMessage(conv)}
+          ) : activeTab === 'my' ? (
+            /* MY ROOMS */
+            conversations.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                <div className="text-4xl mb-2">🏠</div>
+                <p className="text-sm">No rooms yet. Create one!</p>
+                <button
+                  onClick={() => setActiveTab('discover')}
+                  className="mt-3 text-blue-500 hover:text-blue-400 text-sm font-medium"
+                >
+                  Or discover public rooms →
+                </button>
+              </div>
+            ) : (
+              conversations.map((conv) => (
+                <button
+                  key={conv.id}
+                  onClick={() => {
+                    onSelectConversation(conv);
+                    onToggle();
+                  }}
+                  className={`w-full p-3 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition text-left border-l-4 ${
+                    selectedConversation?.id === conv.id 
+                      ? 'bg-blue-50 dark:bg-gray-800 border-blue-500' 
+                      : 'border-transparent'
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg ${conv.isPrivate ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600'}`}>
+                    {conv.isPrivate ? <Lock size={16} /> : <Hash size={16} />}
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900 dark:text-white truncate text-sm">{conv.name}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {getLastMessage(conv)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-full">
+                    <Users size={12} />
+                    {conv._count?.members || 0}
+                  </div>
+                </button>
+              ))
+            )
+          ) : (
+            /* DISCOVER */
+            publicRooms.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                <div className="text-4xl mb-2">🌍</div>
+                <p className="text-sm">No public rooms to discover.</p>
+                <p className="text-xs mt-1">Be the first to create one!</p>
+              </div>
+            ) : (
+              publicRooms.map((room) => (
+                <div
+                  key={room.id}
+                  className="w-full p-3 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition border-b border-gray-100 dark:border-gray-800"
+                >
+                  <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600">
+                    <Globe size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900 dark:text-white truncate text-sm">{room.name}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {room.description || 'Public room'} • by {room.createdBy?.username}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleJoin(room.id)}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition"
+                  >
+                    Join
+                  </button>
                 </div>
-                <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-full">
-                  <Users size={12} />
-                  {conv._count?.members || 0}
-                </div>
-              </button>
-            ))
+              ))
+            )
           )}
         </div>
 

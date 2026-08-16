@@ -1,6 +1,7 @@
 import api from './axios';
 
 export const getConversations = () => api.get('/conversations');
+export const discoverRooms = () => api.get('/conversations/discover');
 export const createConversation = (data) => api.post('/conversations', data);
 export const joinConversation = (id) => api.post(`/conversations/${id}/join`);
 export const getMembers = (id) => api.get(`/conversations/${id}/members`);
