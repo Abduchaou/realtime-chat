@@ -1,1 +1,35 @@
 @import "tailwindcss";
+
+/* Custom scrollbar for chat */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Prevent text selection on UI elements */
+.no-select {
+  user-select: none;
+}
+
+/* Emoji picker z-index fix */
+.emoji-picker-react {
+  z-index: 50 !important;
+}
