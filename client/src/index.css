@@ -1,9 +1,22 @@
 @import "tailwindcss";
 
+/* Mobile viewport fix for iOS Safari */
+@supports (-webkit-touch-callout: none) {
+  .h-screen {
+    height: -webkit-fill-available;
+  }
+}
+
+/* Prevent pull-to-refresh and overscroll on mobile */
+html, body {
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
 /* Custom scrollbar for chat */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -12,7 +25,7 @@
 
 ::-webkit-scrollbar-thumb {
   background: #4b5563;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -24,12 +37,32 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Better tap highlights on mobile */
+button, a, input, textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Prevent text selection on UI elements */
 .no-select {
   user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Emoji picker z-index fix */
 .emoji-picker-react {
   z-index: 50 !important;
+}
+
+/* Mobile keyboard input fix */
+input, textarea {
+  font-size: 16px; /* Prevents iOS zoom on focus */
+}
+
+/* Safe area insets for notched phones */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }
