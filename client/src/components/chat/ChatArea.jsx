@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
 import { getMessages, sendMessage as sendMessageApi } from '../../api/messages';
-import { Send, Paperclip, Smile, ArrowLeft } from 'lucide-react';
+import { uploadFile } from '../../api/upload';
+import { Send, Paperclip, Smile, ArrowLeft, FileText, Image, X } from 'lucide-react';
 import { format } from 'date-fns';
 import EmojiPicker from 'emoji-picker-react';
 
@@ -12,8 +13,11 @@ const ChatArea = ({ conversation, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [typingUsers, setTypingUsers] = useState([]);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadPreview, setUploadPreview] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const { socket } = useSocket();
   const { user } = useAuth();
@@ -65,21 +69,27 @@ const ChatArea = ({ conversation, onBack }) => {
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() && !uploadPreview) return;
+
+    const content = newMessage.trim() || (uploadPreview?.type === 'image' ? '📷 Image' : '📎 File');
+    const type = uploadPreview?.type || 'text';
+    const fileUrl = uploadPreview?.url || null;
 
     socket?.emit('send_message', {
       conversationId: conversation.id,
-      content: newMessage,
-      type: 'text'
+      content,
+      type,
+      fileUrl
     });
 
     try {
-      await sendMessageApi(conversation.id, { content: newMessage, type: 'text' });
+      await sendMessageApi(conversation.id, { content, type, fileUrl });
     } catch (err) {
       console.error('Failed to send:', err);
     }
 
     setNewMessage('');
+    setUploadPreview(null);
     setShowEmoji(false);
     socket?.emit('typing_stop', { conversationId: conversation.id });
   };
@@ -97,11 +107,71 @@ const ChatArea = ({ conversation, onBack }) => {
     inputRef.current?.focus();
   };
 
+  const handleFileSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const res = await uploadFile(file);
+      const { url, type, name } = res.data.data;
+      setUploadPreview({ url, type, name });
+    } catch (err) {
+      console.error('Upload failed:', err);
+      alert('Failed to upload file. Please try again.');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const clearUpload = () => {
+    setUploadPreview(null);
+  };
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typingUsers]);
 
   const isOwnMessage = (msg) => msg.senderId === user?.id;
+
+  const renderMessageContent = (msg) => {
+    if (msg.type === 'image' && msg.fileUrl) {
+      return (
+        <div className="space-y-1">
+          <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" className="block">
+            <img
+              src={msg.fileUrl}
+              alt="Uploaded"
+              className="max-w-[200px] lg:max-w-[250px] rounded-lg hover:opacity-90 transition cursor-pointer"
+              loading="lazy"
+            />
+          </a>
+          {msg.content !== '📷 Image' && (
+            <div className="text-sm">{msg.content}</div>
+          )}
+        </div>
+      );
+    }
+
+    if (msg.type === 'document' && msg.fileUrl) {
+      return (
+        <div className="space-y-1">
+          <a
+            href={msg.fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 p-2 bg-gray-800/30 rounded-lg hover:bg-gray-800/50 transition"
+          >
+            <FileText size={20} className="text-blue-400 shrink-0" />
+            <span className="text-sm underline truncate">{msg.content}</span>
+          </a>
+        </div>
+      );
+    }
+
+    return <div className="text-sm leading-relaxed break-words">{msg.content}</div>;
+  };
 
   if (!conversation) {
     return (
@@ -163,7 +233,7 @@ const ChatArea = ({ conversation, onBack }) => {
                       {!own && showAvatar && (
                         <div className="text-xs font-medium text-blue-500 dark:text-blue-400 mb-0.5">{msg.sender?.username}</div>
                       )}
-                      <div className="text-sm leading-relaxed break-words">{msg.content}</div>
+                      {renderMessageContent(msg)}
                       <div className={`text-[10px] mt-1 ${own ? 'text-blue-200' : 'text-gray-400'}`}>
                         {format(new Date(msg.createdAt), 'h:mm a')}
                       </div>
@@ -189,9 +259,9 @@ const ChatArea = ({ conversation, onBack }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Emoji Picker - Mobile optimized */}
+      {/* Emoji Picker */}
       {showEmoji && (
-        <div className="absolute bottom-16 left-0 right-0 lg:left-auto lg:right-4 lg:bottom-20 z-50 flex justify-center lg:justify-end">
+        <div className="absolute bottom-20 left-0 right-0 lg:left-auto lg:right-4 lg:bottom-20 z-50 flex justify-center lg:justify-end">
           <div className="shadow-2xl rounded-xl overflow-hidden">
             <EmojiPicker 
               onEmojiClick={onEmojiClick} 
@@ -203,14 +273,46 @@ const ChatArea = ({ conversation, onBack }) => {
         </div>
       )}
 
+      {/* Upload Preview */}
+      {uploadPreview && (
+        <div className="mx-3 lg:mx-4 mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center gap-2">
+          {uploadPreview.type === 'image' ? (
+            <Image size={18} className="text-blue-500" />
+          ) : (
+            <FileText size={18} className="text-blue-500" />
+          )}
+          <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">
+            {uploadPreview.name}
+          </span>
+          <button onClick={clearUpload} className="p-1 text-gray-500 hover:text-red-500 transition">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Message Input */}
       <form onSubmit={handleSend} className="p-2 lg:p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center gap-2 shrink-0">
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+          accept="image/*,.pdf,.doc,.docx,.txt"
+          className="hidden"
+        />
+        
         <button 
           type="button" 
-          className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition shrink-0"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition shrink-0 disabled:opacity-50"
         >
-          <Paperclip size={20} />
+          {uploading ? (
+            <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <Paperclip size={20} />
+          )}
         </button>
+        
         <button
           type="button"
           onClick={() => setShowEmoji(!showEmoji)}
@@ -218,6 +320,7 @@ const ChatArea = ({ conversation, onBack }) => {
         >
           <Smile size={20} />
         </button>
+        
         <input
           ref={inputRef}
           type="text"
@@ -225,12 +328,13 @@ const ChatArea = ({ conversation, onBack }) => {
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyDown={handleTyping}
           onFocus={() => setShowEmoji(false)}
-          placeholder="Type a message..."
+          placeholder={uploadPreview ? "Add a caption..." : "Type a message..."}
           className="flex-1 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2.5 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-base min-w-0"
         />
+        
         <button
           type="submit"
-          disabled={!newMessage.trim()}
+          disabled={(!newMessage.trim() && !uploadPreview) || uploading}
           className="p-2.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-md shrink-0"
         >
           <Send size={18} />
