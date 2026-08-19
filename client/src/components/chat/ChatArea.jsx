@@ -136,12 +136,15 @@ const ChatArea = ({ conversation, onBack }) => {
   const isOwnMessage = (msg) => msg.senderId === user?.id;
 
   const renderMessageContent = (msg) => {
+    const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    
     if (msg.type === 'image' && msg.fileUrl) {
+      const fullUrl = msg.fileUrl.startsWith('http') ? msg.fileUrl : `${baseUrl}${msg.fileUrl}`;
       return (
         <div className="space-y-1">
-          <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" className="block">
+          <a href={fullUrl} target="_blank" rel="noopener noreferrer" className="block">
             <img
-              src={msg.fileUrl}
+              src={fullUrl}
               alt="Uploaded"
               className="max-w-[200px] lg:max-w-[250px] rounded-lg hover:opacity-90 transition cursor-pointer"
               loading="lazy"
@@ -155,10 +158,11 @@ const ChatArea = ({ conversation, onBack }) => {
     }
 
     if (msg.type === 'document' && msg.fileUrl) {
+      const fullUrl = msg.fileUrl.startsWith('http') ? msg.fileUrl : `${baseUrl}${msg.fileUrl}`;
       return (
         <div className="space-y-1">
           <a
-            href={msg.fileUrl}
+            href={fullUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 p-2 bg-gray-800/30 rounded-lg hover:bg-gray-800/50 transition"

@@ -1,4 +1,10 @@
-const { uploadToCloudinary } = require('../middleware/uploadMiddleware');
+const path = require('path');
+const fs = require('fs');
+
+const uploadsDir = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 const uploadFile = async (req, res, next) => {
   try {
@@ -6,16 +12,14 @@ const uploadFile = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const result = await uploadToCloudinary(req.file);
-
-    // Determine message type
+    const fileUrl = `/uploads/${req.file.filename}`;
     const isImage = req.file.mimetype.startsWith('image/');
     const type = isImage ? 'image' : 'document';
 
     res.status(200).json({
       success: true,
       data: {
-        url: result.secure_url,
+        url: fileUrl,
         type,
         name: req.file.originalname,
         size: req.file.size

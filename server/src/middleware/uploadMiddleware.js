@@ -1,8 +1,21 @@
 const multer = require('multer');
-const cloudinary = require('../config/cloudinary');
+const path = require('path');
 
-// Use memory storage (we'll upload directly to Cloudinary)
-const storage = multer.memoryStorage();
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadsDir = path.join(__dirname, '../../uploads');
+    const fs = require('fs');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
 
 const fileFilter = (req, file, cb) => {
   const allowedMimeTypes = [
@@ -29,22 +42,4 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB max
 });
 
-// Upload to Cloudinary
-const uploadToCloudinary = async (file) => {
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        resource_type: file.mimetype.startsWith('image/') ? 'image' : 'raw',
-        folder: 'chat-uploads',
-        public_id: `${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, '')}`
-      },
-      (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
-      }
-    );
-    uploadStream.end(file.buffer);
-  });
-};
-
-module.exports = { upload, uploadToCloudinary };
+module.exports = { upload };

@@ -8,6 +8,8 @@ const messageRoutes = require('./routes/messageRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const errorMiddleware = require('./middleware/errorMiddleware');
 
+const path = require('path');
+
 const app = express();
 
 // Middleware
