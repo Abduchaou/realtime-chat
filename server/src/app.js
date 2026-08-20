@@ -13,6 +13,15 @@ const path = require('path');
 const app = express();
 
 // Middleware
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+
 app.use(helmet());
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
